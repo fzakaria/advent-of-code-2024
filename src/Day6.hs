@@ -1,36 +1,40 @@
 module Main where
 
+import Control.DeepSeq (NFData, rnf)
+import Control.Parallel.Strategies (parList, rdeepseq, using)
 import Data.List (nub)
 import Data.Set qualified as Set
 import Data.Void
 import Text.Megaparsec
 import Text.Megaparsec.Char (char, newline)
-import Control.Parallel.Strategies (parList, rdeepseq, using)
-import Control.DeepSeq (NFData,rnf)
 
 -- Define a type alias for simplicity
 type Parser = Parsec Void String
 
-data Tile = Obstruction | Empty Char
+data Tile = Obstruction Char | Empty Char
   deriving (Eq)
 
 instance Show Tile where
-  show Obstruction = "#"
+  show (Obstruction c) = [c]
   show (Empty c) = [c]
 
 instance NFData Tile where
-  rnf Obstruction = ()
+  rnf (Obstruction c) = rnf c
   rnf (Empty c) = rnf c
 
 isEmptyTile :: Maybe Tile -> Bool
 isEmptyTile (Just (Empty _)) = True
 isEmptyTile _ = False
 
+isObstructionTile :: Maybe Tile -> Bool
+isObstructionTile (Just (Obstruction _)) = True
+isObstructionTile _ = False
+
 -- Parser for a single integer
 tile :: Parser Tile
 tile =
   choice
-    [ Obstruction <$ char '#', -- Use <$ to return a fixed value
+    [ Obstruction <$> char '#', -- Use <$ to return a fixed value
       Empty <$> (char '.' <|> char '^') -- Use <$> to pass the matched char into Empty
     ]
 
@@ -78,7 +82,7 @@ stepGuard :: [[Tile]] -> (Direction, (Int, Int)) -> (Direction, (Int, Int))
 stepGuard ts (d, (x, y))
   -- if we are at the end we are done
   | x < 0 || y < 0 || x >= cols || y >= rows = (d, (x, y))
-  | nextTile == Just Obstruction = (rightDirection, nextPosRight)
+  | isObstructionTile nextTile = (rightDirection, nextPosRight)
   | otherwise = (d, nextPos)
   where
     rows = length ts
@@ -96,6 +100,36 @@ takeUntilConverges f = takeUntil
       | otherwise = current : takeUntil next
       where
         next = f current
+
+-- | Predicate for paths that loop instead of running off the edge of the map.
+-- <https://en.wikipedia.org/wiki/Cycle_detection#Floyd's_tortoise_and_hare>
+-- https://github.com/glguy/advent/blob/main/solutions/src/2024/06.hs
+isLoop :: Eq a => [a] -> Bool
+isLoop a = go a a
+  where
+   go (x:xs) (_:y:ys) = x == y || go xs ys
+   go _      _        = False
+
+walk :: [[Tile]] -> (Direction, (Int, Int)) -> [(Direction, (Int, Int))]    
+walk ts (d, (x, y)) = (d, (x, y)) :
+    case tileAt ts (step d (x, y)) of
+        Just (Empty _) -> walk ts (d, step d (x, y))
+        Just (Obstruction _) -> walk ts (turnRight d, (x, y))
+        Nothing -> []
+
+detectCycleDumb :: [[Tile]] -> (Direction, (Int, Int)) -> Bool
+detectCycleDumb ts startState = go startState 0
+  where
+    rows = length ts
+    cols = if null ts then 0 else length (head ts)
+    maxSteps = rows * cols
+    go :: (Direction, (Int, Int)) -> Int -> Bool
+    go state steps
+      | steps > maxSteps = True -- Exceeds maximum steps, indicating a cycle
+      | outOfBounds (snd state) = False -- Guard is out of bounds, no cycle
+      | otherwise = go (stepGuard ts state) (steps + 1)
+    -- Check if a position is out of bounds
+    outOfBounds (x, y) = x < 0 || y < 0 || x >= cols || y >= rows
 
 -- Detects if the guard's path forms a cycle
 detectCycle :: [[Tile]] -> (Direction, (Int, Int)) -> Bool
@@ -146,33 +180,30 @@ main = do
           -- but pretend there is a obstruction
           -- if the next step would result in a value in the original
           -- list we have cycled
-          let rows = length p
-          let cols = if null p then 0 else length (head p)
-          let allPotentialObstacles =
-                [ (x, y)
-                | y <- [0 .. rows - 1],
-                    x <- [0 .. cols - 1],
-                    tileAt p (x, y) == Just (Empty '.') -- Ensure the tile is empty
-                ]
-          
-          let potentialObstacles =
-                map snd $
-                  filter
-                    ( \(d, pos) ->
-                        let nextTile = tileAt p (step d pos)
-                         in isEmptyTile nextTile
-                    )
-                    (drop 1 withoutLastStep)
+        --   let rows = length p
+        --   let cols = if null p then 0 else length (head p)
+        --   let allPotentialObstacles =
+        --         [ (x, y)
+        --           | y <- [0 .. rows - 1],
+        --             x <- [0 .. cols - 1],
+        --             tileAt p (x, y) == Just (Empty '.') -- Ensure the tile is empty
+        --         ]
+
+          let potentialObstacles = map snd (drop 1 withoutLastStep)
+
           let potentialPuzzles =
                 map
                   ( \pos ->
-                      (pos, replaceTile p pos Obstruction)
+                      (pos, replaceTile p pos (Obstruction '0'))
                   )
-                  allPotentialObstacles
-          let obstructionCycles = (filter (\(_, p') -> detectCycle p' (North, startPos)) potentialPuzzles) `using` parList rdeepseq
+                  potentialObstacles
+
+          let obstructionCycles = filter (\(_, p') -> isLoop $ walk p' (North, startPos)) potentialPuzzles
           -- print each solution
-        --   mapM_ (\cycle -> do
+        --   mapM_
+        --     ( \cycle -> do
         --         printPuzzle (snd cycle)
         --         putStrLn ""
-        --     ) obstructionCycles
-          print $ length obstructionCycles
+        --     )
+        --     obstructionCycles
+          print $ length $ nub $ map fst obstructionCycles  
