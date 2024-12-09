@@ -36,6 +36,9 @@ printPuzzle (x : xs) = do
   putStrLn $ foldl (\acc t -> acc ++ show t) "" x
   printPuzzle xs
 
+-- (1, 2) to (3, 1) = 2, -1
+-- (3, 1) to (1, 2) = -2, 1
+
 -- (4, 3) to (5, 5) = -1, -2
 -- (5, 5) to (4, 3) = 1, 2
 allPairs :: [a] -> [(a, a)]
@@ -49,6 +52,15 @@ add (x1, y1) (x2, y2) = (x1 + x2, y1 + y2)
 
 sub :: (Int, Int) -> (Int, Int) -> (Int, Int)
 sub (x1, y1) (x2, y2) = (x1 - x2, y1 - y2)
+
+line :: (Int, Int) -> (Int, Int) -> [(Int, Int)]
+line start vector = iterate (add vector) start
+
+outOfBounds :: Int -> Int -> (Int, Int) -> Bool
+outOfBounds rows cols (x, y) = x < 0 || x >= cols || y < 0 || y  >= rows
+
+negative :: (Int, Int) -> (Int, Int)
+negative (x, y) = (-x, -y)
 
 main :: IO ()
 main = do
@@ -89,3 +101,16 @@ main = do
       let validPoints = filter (\(x, y) -> x >= 0 && x < cols && y >= 0 && y < rows) flattened
       let uniquePoints = nub validPoints
       print $ length uniquePoints
+      -- Part 2
+      let vectors =
+            concatMap (\g ->
+                let allP = allPairs g
+                in
+                map (\(a, b) -> (a, distance a b)) allP
+            ) points
+
+      let l = concatMap (\(a, d) -> takeWhile (not . outOfBounds rows cols) (line a d)) vectors
+      let r = concatMap (\(a, d) -> takeWhile (not . outOfBounds rows cols) (line a (negative d))) vectors
+      print l
+      print r
+      print $ length $ nub (l ++ r)
