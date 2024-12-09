@@ -165,7 +165,7 @@ printPuzzle (x : xs) = do
 main :: IO ()
 main = do
   input <- readFile "input/Day6.txt"
-  case parse puzzle "Day5.txt" input of
+  case parse puzzle "Day6.txt" input of
     Left err -> putStrLn $ errorBundlePretty err
     Right p -> do
       case startTile p of
