@@ -14,9 +14,16 @@ type Parser = Parsec Void String
 data Block = File Int | Free
   deriving (Eq)
 
+data CompactBlock = CompactFile {id :: Int, size :: Int} | CompactFree { size :: Int}
+  deriving (Eq)
+
 instance Show Block where
   show Free = "."
   show (File i) = show i
+
+instance Show CompactBlock where
+  show (CompactFree size) = replicate size '.'
+  show (CompactFile i size) = show (replicate size i)
 
 -- just like https://hackage.haskell.org/package/megaparsec-4.0.0/docs/src/Text-Megaparsec-Combinator.html#sepBy
 puzzle :: Parser [Int]
@@ -86,6 +93,17 @@ defrag bs = go
       | otherwise = bs
     files = findIndices isFile bs
     empties = findIndices isFree bs
+        
+compact :: [Block] -> [CompactBlock]
+compact = go
+  where
+    go [] = []
+    go (f@(File i) : xs) = CompactFile i (1 + length fs) : go rest
+      where
+        (fs, rest) = span (== f) xs
+    go (Free : xs) = CompactFree (1 + length fs) : go rest
+      where
+        (fs, rest) = span isFree xs
 
 main :: IO ()
 main = do
