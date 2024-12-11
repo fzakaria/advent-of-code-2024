@@ -119,3 +119,5 @@ main = do
       let uniquePeaks = map nub peaks
       let score = sum $ map length uniquePeaks
       print score
+      -- part 2
+      print $ sum $ map length a
