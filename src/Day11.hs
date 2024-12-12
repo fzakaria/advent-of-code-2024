@@ -4,6 +4,7 @@ import Data.Void (Void)
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer (decimal)
+import qualified Data.Map as Map
 
 -- Define a type alias for simplicity
 type Parser = Parsec Void String
@@ -44,12 +45,24 @@ blinkStone n
 blink :: [Int] -> [Int]
 blink = concatMap blinkStone
 
+blink' :: Map.Map Int Int -> Map.Map Int Int
+blink' stones = Map.fromListWith (+) [(stone', n) | (stone, n) <- Map.assocs stones, stone' <- blinkStone stone]
+
 main :: IO ()
 main = do
   input <- readFile "input/Day11.txt"
   case parse puzzle "Day11.txt" input of
     Left err -> putStrLn $ errorBundlePretty err
     Right p -> do
-      -- mapM print $ take 6 $ iterate blink p
+      mapM_ (putStrLn . show) (take 10 $ iterate blink p)
       -- We need to take one to get the 25th iteration
       print $ length . last $ take 26 $ iterate blink p
+
+      -- Create a map where the k is the stone number and the length
+      -- is the number of stones
+      let m = Map.fromListWith (+) $ map (, 1) p
+      let answer :: Int = Map.foldr (+) 0 (last $ take 26 $ iterate blink' m)
+      print answer
+
+      -- part 2
+      print $ Map.foldr (+) 0 (last $ take 76 $ iterate blink' m)

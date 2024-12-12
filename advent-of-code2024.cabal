@@ -258,6 +258,7 @@ executable day11
     , megaparsec
     , array
     , vector
+    , containers
     
   -- Directories containing source files.
   hs-source-dirs:  src
