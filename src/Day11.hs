@@ -45,6 +45,9 @@ blinkStone n
 blink :: [Int] -> [Int]
 blink = concatMap blinkStone
 
+-- I needed help on this one.
+-- Looked at a hint to get what to do.
+-- First time using Map
 blink' :: Map.Map Int Int -> Map.Map Int Int
 blink' stones = Map.fromListWith (+) [(stone', n) | (stone, n) <- Map.assocs stones, stone' <- blinkStone stone]
 
