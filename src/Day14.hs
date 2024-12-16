@@ -1,7 +1,7 @@
 module Main where
 
 import Control.Monad (foldM, join, void)
-import Data.List (group, sort)
+import Data.List (group, nub, sort)
 import Data.Map qualified as Map
 import Data.Maybe qualified
 import Data.Void (Void)
@@ -19,7 +19,12 @@ data Robot = Robot
   { position :: Coord,
     velocity :: Coord
   }
-  deriving (Read, Show, Ord, Eq)
+  deriving (Read, Show, Ord)
+
+-- Custom Eq instance
+instance Eq Robot where
+  (==) :: Robot -> Robot -> Bool
+  (==) (Robot p1 _) (Robot p2 _) = p1 == p2
 
 add :: Coord -> Coord -> Coord
 add (C x y) (C x' y') = C (x + x') (y + y')
@@ -76,6 +81,20 @@ isMiddle :: Quadrant -> Bool
 isMiddle Middle = True
 isMiddle _ = False
 
+neighbors :: Int -> Int -> Map.Map Coord Int -> Robot -> [Robot]
+neighbors w h robotMap (Robot (C x y) _) =
+    filter (\r -> position r `Map.member` robotMap) $
+        nub
+          [ Robot (C x' y') (C 0 0)
+            | x' <- [x - 1 .. x + 1],
+              y' <- [y - 1 .. y + 1],
+              x' /= x || y' /= y,
+              x' >= 0,
+              y' >= 0,
+              x' < w,
+              y' < h
+          ]
+
 main :: IO ()
 main = do
   input <- readFile "input/Day14.txt"
@@ -88,3 +107,12 @@ main = do
       let a = product $ map length $ group . sort $ filter (not . isMiddle) $ map (quadrant w h) robots
       printRobots w h robots
       print a
+      -- part 2
+      -- tip from Mark: Look for like 5 robots with 8 neighbors
+      let allRobots = iterate (second w h) p
+      let robots' = filter (\(_, rs) ->
+           let robotMap = Map.fromListWith (+) (map ((,1) . position) rs)
+           in
+           length (filter ((>= 8) . length) (map (neighbors w h robotMap) rs)) >= 2) (zip [0..] allRobots)
+      print $ fst $ last $ take 1 robots'
+      -- printRobots w h $ last $ take 1 robots'
