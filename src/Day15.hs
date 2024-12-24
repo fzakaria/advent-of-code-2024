@@ -1,14 +1,12 @@
 module Main where
 
-import Control.Monad (foldM, join, void)
-import Data.List (group, nub, sort)
+import Data.Bifunctor qualified
 import Data.Map qualified as Map
 import Data.Maybe qualified
 import Data.Void (Void)
 import Text.Megaparsec
-import Text.Megaparsec.Char (char, newline, space, string)
+import Text.Megaparsec.Char (char, newline, space)
 import Text.Megaparsec.Char.Lexer (decimal, signed)
-import qualified Data.Bifunctor
 
 -- Define a type alias for simplicity
 type Parser = Parsec Void String
@@ -16,7 +14,7 @@ type Parser = Parsec Void String
 data Puzzle = Puzzle [[Tile]] [Move]
   deriving (Read, Show, Ord, Eq)
 
-data Tile = Wall | Robot | Box | Empty
+data Tile = Wall | Robot | Box | LeftBox | RightBox | Empty
   deriving (Read, Ord, Eq)
 
 instance Show Tile where
@@ -25,6 +23,8 @@ instance Show Tile where
   show Robot = "@"
   show Box = "O"
   show Empty = "."
+  show LeftBox = "["
+  show RightBox = "]"
 
 data Move = Up | Down | Left | Right
   deriving (Read, Ord, Eq)
@@ -63,11 +63,21 @@ integer = signed space decimal
 
 tile :: Parser Tile
 tile = do
-  c <- choice [char '#', char '@', char 'O', char '.']
+  c <-
+    choice
+      [ char '#',
+        char '@',
+        char 'O',
+        char '.',
+        char '[',
+        char ']'
+      ]
   case c of
     '#' -> return Wall
     '@' -> return Robot
     'O' -> return Box
+    '[' -> return LeftBox
+    ']' -> return RightBox
     '.' -> return Empty
     _ -> fail "Invalid tile"
 
@@ -128,20 +138,20 @@ moveRobot m d
   | nextTile == Wall = m -- Do not move if wall
   | nextTile == Empty = Map.insert robot Empty $ Map.insert nextCoord Robot m
   | nextTile == Box && hasEmpty =
-    -- we want to move the nextTiles in reverse order
-    -- and fold into a new map
-    foldl
-      ( \acc (c, t) ->
-        let c' = addMove d c
-          in
-          case t of
-            Empty -> acc
-            Box -> Map.insert c Empty $ Map.insert c' Box acc
-            Wall -> acc
-            Robot -> Map.insert c Empty $ Map.insert c' Robot acc
-      )
-      m
-      (reverse nextTiles)
+      -- we want to move the nextTiles in reverse order
+      -- and fold into a new map
+      foldl
+        ( \acc (c, t) ->
+            let c' = addMove d c
+             in case t of
+                  Empty -> acc
+                  Box -> Map.insert c Empty $ Map.insert c' Box acc
+                  Wall -> acc
+                  Robot -> Map.insert c Empty $ Map.insert c' Robot acc
+                  _ -> error "Invalid tile"
+        )
+        m
+        (reverse nextTiles)
   | otherwise = m
   where
     robot = head $ Map.keys $ Map.filter (== Robot) m
@@ -150,6 +160,16 @@ moveRobot m d
     nextTiles = takeUntil (\(_, t) -> t == Empty || t == Wall) $ map (Data.Bifunctor.second (Data.Maybe.fromMaybe Wall) . (\c -> (c, c `Map.lookup` m))) nextCoords
     hasEmpty = Empty `elem` map snd nextTiles
     nextTile = snd (nextTiles !! 1)
+
+widen :: [Char] -> [Char]
+widen =
+  concatMap
+    ( \c -> case c of
+        'O' -> "[]"
+        '@' -> "@."
+        '\n' -> "\n"
+        _ -> [c, c]
+    )
 
 main :: IO ()
 main = do
@@ -162,3 +182,10 @@ main = do
       let answer = sum $ map (\(Coord (x, y)) -> 100 * y + x) (Map.keys (Map.filter (== Box) moveN))
       printMap $ toList moveN
       print answer
+  input <- readFile "input/Day15.txt"
+  let wideInput = widen input
+  case parse puzzle "Day15.txt" wideInput of
+    Prelude.Left err -> putStrLn $ errorBundlePretty err
+    Prelude.Right (Puzzle tiles moves) -> do
+      let tileMap = toMap tiles
+      printMap tiles
