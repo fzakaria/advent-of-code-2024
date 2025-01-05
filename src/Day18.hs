@@ -2,11 +2,9 @@ module Main where
 
 import Data.List (minimumBy)
 import Data.Map qualified as M
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Ord (comparing)
-import Data.Set qualified as S
 import Data.Void (Void)
-import Debug.Trace (trace)
 
 import Text.Megaparsec
 import Text.Megaparsec.Char (char, newline)
